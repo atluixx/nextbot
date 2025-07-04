@@ -1,0 +1,8 @@
+node_modules/
+_IGNORE_next/
+next.data.json
+.env
+/app/fonts/
+jsconfig.json
+.vscode
+/app/icons
