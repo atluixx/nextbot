@@ -1,3 +1,4 @@
+// @ts-nocheck
 
 import message_handler from "./app/handlers/message.handler.js";
 import media_handler from "./app/handlers/media.handler.js";
@@ -5,6 +6,7 @@ import botMessages from "./app/messages/bot.messages.js";
 import { create } from "@open-wa/wa-automate";
 import { PrismaClient } from "@prisma/client";
 import { pathToFileURL } from "url";
+import puppeteer from "puppeteer";
 import path from "path";
 import fs from "fs";
 
@@ -21,7 +23,7 @@ async function config(client) {
 
   client.messages = botMessages;
 
-  client.prefix = "-";
+  client.prefix = ".";
 
   client.isAdmin = (u) => {
     return Object.values(client.admins).some((admin) => admin.id === u.id);
@@ -70,13 +72,13 @@ prisma
 
 create({
   sessionId: "next",
+  useChrome: true,
 }).then(async (client) => {
   console.clear();
-  // @ts-ignore
+
   client.id = (await client.getMe()).id;
   await config(client);
 
-  // @ts-ignore
   client.loadCommands().then(() => {
     console.log("✅ Comandos carregados com sucesso!");
   });
@@ -98,7 +100,7 @@ create({
         client,
         message: m,
         prisma,
-        // @ts-ignore
+
         prefix: client.prefix || "-",
       });
     } catch (err) {

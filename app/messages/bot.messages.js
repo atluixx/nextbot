@@ -35,4 +35,5 @@ export default {
       return `⚠️ Ocorreu um erro ao tentar criar a figurinha.\nCertifique-se de que a mídia não é muito grande ou tente novamente mais tarde.`;
     },
   },
+  hangman: {},
 };

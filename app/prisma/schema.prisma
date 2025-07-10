@@ -25,15 +25,17 @@ enum Ratio {
 }
 
 model User {
-  database_id   Int     @id @unique @default(autoincrement())
-  id            String  @unique
-  pix_id        String  @unique @default(cuid())
-  name          String? @default("Unknown")
-  authorized    Boolean @default(false)
-  blacklisted   Boolean @default(false)
-  premium       Boolean @default(false)
-  role          Role    @default(USER)
-  authorized_by String  @default("Unknown")
+  database_id        Int       @id @unique @default(autoincrement())
+  id                 String    @unique
+  pix_id             String    @unique @default(cuid())
+  name               String?   @default("Unknown")
+  authorized         Boolean?  @default(false)
+  blacklisted        Boolean?  @default(false)
+  blacklisted_reason String?   @default("None")
+  blacklisted_until  DateTime?
+  premium            Boolean?  @default(false)
+  role               Role?     @default(USER)
+  authorized_by      String?   @default("Unknown")
 
   created DateTime @default(now())
   updated DateTime @updatedAt
@@ -60,10 +62,26 @@ model User {
 }
 
 model Stats {
-  stats_id   String @id @default(cuid())
-  forca_wins Int    @default(0)
-  ttt_wins   Int    @default(0)
-  stickers   Int    @default(0)
+  stats_id String @id @default(cuid())
+
+  /// Hangman stats
+  hangman_games   Int   @default(0)
+  hangman_wins    Int   @default(0)
+  hangman_losses  Int   @default(0)
+  hangman_best    Int   @default(0)
+  hangman_streak  Int   @default(0)
+  hangman_winrate Float @default(0.0)
+
+  // Tic Tac Toe stats
+  ttt_games   Int   @default(0)
+  ttt_wins    Int   @default(0)
+  ttt_draws   Int   @default(0)
+  ttt_losses  Int   @default(0)
+  ttt_best    Int   @default(0)
+  ttt_streak  Int   @default(0)
+  ttt_winrate Float @default(0.0)
+
+  stickers Int @default(0)
 
   user User? @relation()
 }
@@ -114,6 +132,21 @@ model Group {
   welcome_message String   @default("Boas-vindas {user}!")
   total_messages  Int      @default(0)
   last_activity   DateTime @default(now())
+
+  hangman_strek   Int   @default(0)
+  hangman_best    Int   @default(0)
+  hangman_games   Int   @default(0)
+  hangman_losses  Int   @default(0)
+  hangman_wins    Int   @default(0)
+  hangman_winrate Float @default(0.0)
+
+  ttt_games   Int   @default(0)
+  ttt_wins    Int   @default(0)
+  ttt_draws   Int   @default(0)
+  ttt_losses  Int   @default(0)
+  ttt_best    Int   @default(0)
+  ttt_streak  Int   @default(0)
+  ttt_winrate Float @default(0.0)
 
   users      User[]
   groupUsers GroupUser[]

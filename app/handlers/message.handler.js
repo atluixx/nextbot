@@ -1,30 +1,31 @@
+// @ts-nocheck
+
 /**
- * @param {{ client: import('@open-wa/wa-automate').Client, prefix: String, message: import("@open-wa/wa-automate").Message, prisma: import("@prisma/client").PrismaClient }} param0
+ * @param {{
+ *   client: import('@open-wa/wa-automate').Client,
+ *   message: import('@open-wa/wa-automate').Message,
+ *   prisma: import('@prisma/client').PrismaClient,
+ *   prefix: string
+ * }} param0
  */
-const message_handler = async ({ client, message, prisma, prefix = '-' }) => {
-  let group = false;
 
-  if (message.chat.id.endsWith('@g.us')) group = true;
-  if (!message.body.trim()) return;
+const message_handler = async ({ client, message, prisma, prefix = "-" }) => {
+  const chatId = message.chatId;
+  const senderId = message.sender.id;
+  const isGroup = chatId.endsWith("@g.us");
 
-  let user = await prisma.user.findUnique({
-    where: { id: message.sender.id },
-  });
+  if (!message.body?.trim()) return;
 
-  let chat = await prisma.group.findUnique({
-    where: { group_id: message.chat.id },
-  });
+  let user = await prisma.user.findUnique({ where: { id: senderId } });
 
   if (!user) {
     user = await prisma.user.create({
       data: {
-        id: message.sender.id,
-        name: message.sender.pushname || 'Unknown',
-
+        id: senderId,
+        name: message.sender.pushname || "Unknown",
         config: {
           create: {},
         },
-
         stats: {
           create: {},
         },
@@ -34,77 +35,132 @@ const message_handler = async ({ client, message, prisma, prefix = '-' }) => {
         stats: true,
       },
     });
+
+    console.log(`[DB] Novo usuário registrado: ${senderId}`);
   }
 
-  if (!chat && group) {
-    chat = await prisma.group.create({
+  let group = null;
+
+  if (isGroup) {
+    group = await prisma.group.findUnique({ where: { group_id: chatId } });
+
+    if (!group) {
+      try {
+        group = await prisma.group.create({
+          data: {
+            group_id: chatId,
+            name: message.chat.name || "Unknown",
+          },
+        });
+
+        console.log(`[DB] Novo grupo registrado: ${chatId}`);
+      } catch (err) {
+        console.error(`[DB] Erro ao registrar grupo ${chatId}:`, err);
+      }
+    }
+
+    try {
+      await prisma.groupUser.upsert({
+        where: {
+          user_id_group_id: {
+            user_id: user.database_id,
+            group_id: group.database_id,
+          },
+        },
+        update: {
+          messages: { increment: 1 },
+        },
+        create: {
+          user_id: user.database_id,
+          group_id: group.database_id,
+          messages: 1,
+        },
+      });
+    } catch (err) {
+      console.error(`[DB] Erro ao registrar GroupUser:`, err);
+    }
+
+    await prisma.group.update({
+      where: { group_id: chatId },
       data: {
-        group_id: message.chat.id,
+        total_messages: { increment: 1 },
+        last_activity: new Date(),
       },
     });
   }
+  prefix = group.prefix || prefix;
 
   console.log(
-    `[M] Message received from ${
-      message.sender.pushname || message.sender.formattedName || 'somebody'
-    }: ${message.body || message.caption || 'No text'} | ${
+    `[M] Mensagem de ${
+      message.sender.pushname || message.sender.formattedName || "Alguém"
+    }: ${message.body || message.caption || "[Sem texto]"} | Tipo: ${
       message.type
-    } | ID: ${message.id} | Group: ${group}`
+    } | ID: ${message.id} | Grupo: ${isGroup}`
   );
 
   if (!message.body.startsWith(prefix)) return;
 
-  const [command, ...args] = message.body
+  const [commandName, ...args] = message.body
     .slice(prefix.length)
     .trim()
-    .split(/ +/);
+    .split(/\s+/);
 
-  // @ts-ignore
-  const cmd = client.commands.get(command.toLowerCase());
+  const command = client.commands.get(commandName.toLowerCase());
 
-  if (!cmd) {
-    return;
+  if (!command) return;
+
+  await prisma.config.update({
+    where: { config_id: user.config_id },
+    data: {
+      commands_used: {
+        increment: 1,
+      },
+    },
+  });
+
+  if (command.admin_only && !client.isAdmin(message.sender)) {
+    return client.reply(
+      chatId,
+      client.messages?.moderation?.admin_only?.({
+        username: message.sender.pushname,
+      }) || "⚠️ Apenas administradores podem usar este comando.",
+      message.id
+    );
   }
 
   if (
-    cmd.admin_only &&
-    // @ts-ignore
-    !client.isAdmin(message.sender)
-  )
+    command.group_admin_only &&
+    !(await client.getGroupAdmins(chatId)).includes(senderId)
+  ) {
     return client.reply(
-      message.chat.id,
-      // @ts-ignore
-      client.messages.moderation.admin_only({
+      chatId,
+      client.messages?.moderation?.group_admin?.({
         username: message.sender.pushname,
-      }),
+      }) || "⚠️ Apenas administradores do grupo podem usar este comando.",
       message.id
     );
-
-  if (
-    cmd.group_admin_only &&
-    // @ts-ignore
-    !(await client.getGroupAdmins(message.chat.id)).includes(message.sender.id)
-  )
-    return client.reply(
-      message.chat.id,
-      // @ts-ignore
-      client.messages.moderation.group_admin({
-        username: message.sender.pushname,
-      }),
-      message.id
-    );
+  }
 
   try {
-    await cmd.execute({
+    await command.execute({
       client,
       message,
       args,
       user,
+      group,
       prisma,
-      prefix,
+      prefix: group.prefix || prefix,
+      chatId,
+      senderId,
+      isGroup,
     });
   } catch (error) {
-    console.log(`[M] Error executing command ${command}:`, error);
+    console.error(`[CMD] Erro ao executar comando '${commandName}':`, error);
+    await client.reply(
+      chatId,
+      "❌ Ocorreu um erro ao executar o comando. Tente novamente.",
+      message.id
+    );
   }
 };
 
