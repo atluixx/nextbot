@@ -28,10 +28,10 @@ const command = {
 
     const groupUsers = await prisma.groupUser.findMany({
       where: {
-        group_id: group.database_id, // corrigido de group.database_id
+        group_id: group.database_id,
       },
       orderBy: {
-        messages: "desc", // assumindo que o campo é "messages"
+        messages: "desc",
       },
       take: 10,
     });
@@ -43,11 +43,18 @@ const command = {
       );
     }
 
-    const ranking = groupUsers
-      .map((gu, index) => {
-        console.log(gu);
+    const rankingLines = await Promise.all(
+      groupUsers.map(async (gu, index) => {
+        const user = await prisma.user.findFirst({
+          where: { database_id: gu.user_id },
+        });
+
+        const name = user?.name || "Usuário desconhecido";
+        return `${index + 1}. ${name} — ${gu.messages} mensagens`;
       })
-      .join("\n");
+    );
+
+    const ranking = rankingLines.join("\n");
 
     await client.sendText(
       message.chat.id,

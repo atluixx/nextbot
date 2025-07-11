@@ -16,7 +16,7 @@ const message_handler = async ({ client, message, prisma, prefix = "-" }) => {
 
   if (!message.body?.trim()) return;
 
-  let user = await prisma.user.findUnique({ where: { id: senderId } });
+  let user = await prisma.user.findFirst({ where: { id: senderId } });
 
   if (!user) {
     user = await prisma.user.create({
@@ -42,7 +42,7 @@ const message_handler = async ({ client, message, prisma, prefix = "-" }) => {
   let group = null;
 
   if (isGroup) {
-    group = await prisma.group.findUnique({ where: { group_id: chatId } });
+    group = await prisma.group.findFirst({ where: { group_id: chatId } });
 
     if (!group) {
       try {
@@ -106,6 +106,17 @@ const message_handler = async ({ client, message, prisma, prefix = "-" }) => {
     .split(/\s+/);
 
   const command = client.commands.get(commandName.toLowerCase());
+
+  if (message.mentionedJidList.includes(await client.getHostNumber()))
+    return await client.reply(
+      message.chat.id,
+      `✨ | Olá, ${message.sender.pushname}! Eu sou o ${
+        (
+          await client.getMe()
+        ).name
+      }. \n Meu prefixo neste grupo é ${prefix}`,
+      message.id
+    );
 
   if (!command) return;
 

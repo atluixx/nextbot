@@ -1,5 +1,16 @@
 // @ts-nocheck
 
+/*
+
+ _____                                        ____                         
+| ____|   _    __ _ _ __ ___   ___     __ _  | __ ) _ __ _   _ _ __   __ _ 
+|  _|| | | |  / _` | '_ ` _ \ / _ \   / _` | |  _ \| '__| | | | '_ \ / _` |
+| |__| |_| | | (_| | | | | | | (_) | | (_| | | |_) | |  | |_| | | | | (_| |
+|_____\__,_|  \__,_|_| |_| |_|\___/   \__,_| |____/|_|   \__,_|_| |_|\__,_|
+
+
+*/
+
 import message_handler from "./app/handlers/message.handler.js";
 import media_handler from "./app/handlers/media.handler.js";
 import botMessages from "./app/messages/bot.messages.js";
@@ -59,6 +70,78 @@ async function config(client) {
       }
     }
   };
+
+  client.findUser = ({ input, chat = "", message }) => {
+    if (!chat) chat = message.chat.id;
+    const participants = message.chat.groupMetadata.participants;
+
+    if (!input && message.quotedMessage?.quoted) {
+      const quotedUserId =
+        message.quotedMessage.quoted.sender?.id ||
+        message.quotedMessage.quoted?.id?.participant;
+      const quotedUser = participants.find((p) => p.id === quotedUserId);
+      return quotedUser || null;
+    }
+
+    if (!input) return null;
+
+    const tryAllModes = () => {
+      const tryModes = [
+        () =>
+          participants.find((c) => c.id.replace("@c.us", "").includes(input)),
+        () => participants.find((c) => c.id === input),
+        () =>
+          participants.find(
+            (c) => c.id.replace("@c.us", "") === input.replace("@", "")
+          ),
+        () =>
+          participants.find((c) =>
+            (c.pushname || "").toLowerCase().includes(input.toLowerCase())
+          ),
+      ];
+
+      for (const tryMode of tryModes) {
+        const result = tryMode();
+        if (result) return result;
+      }
+
+      return null;
+    };
+
+    let mode;
+    if (!isNaN(parseInt(input))) mode = "number";
+    else if (input.includes("@c.us")) mode = "id";
+    else if (input.includes("@")) mode = "tag";
+    else mode = "name";
+
+    let users = [];
+
+    switch (mode) {
+      case "number":
+        users = participants.filter((c) =>
+          c.id.replace("@c.us", "").includes(input)
+        );
+        break;
+
+      case "id":
+        users = participants.filter((c) => c.id === input);
+        break;
+
+      case "tag":
+        users = participants.filter(
+          (c) => c.id.replace("@c.us", "") === input.replace("@", "")
+        );
+        break;
+
+      case "name":
+        users = participants.filter((c) =>
+          (c.pushname || "").toLowerCase().includes(input.toLowerCase())
+        );
+        break;
+    }
+
+    return users[0] || tryAllModes();
+  };
 }
 
 prisma
@@ -101,7 +184,7 @@ create({
         message: m,
         prisma,
 
-        prefix: client.prefix || "-",
+        prefix: client.prefix || ".",
       });
     } catch (err) {
       console.error("❌ Erro ao processar mensagem:", err);

@@ -34,6 +34,7 @@ model User {
   blacklisted_reason String?   @default("None")
   blacklisted_until  DateTime?
   premium            Boolean?  @default(false)
+  premium_until      DateTime?
   role               Role?     @default(USER)
   authorized_by      String?   @default("Unknown")
 
@@ -127,7 +128,7 @@ model Group {
   group_id        String   @unique
   name            String   @default("Unknown")
   autosticker     Boolean  @default(false)
-  prefix          String   @default("-")
+  prefix          String   @default(".")
   members         Int      @default(0)
   welcome_message String   @default("Boas-vindas {user}!")
   total_messages  Int      @default(0)

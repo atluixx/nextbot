@@ -1,16 +1,18 @@
+// @ts-nocheck
+
 /**
  * @param {{client: import("@open-wa/wa-automate").Client, message: import("@open-wa/wa-automate").Message, prisma: import("@prisma/client").PrismaClient }} param0
  */
 
 const media_handler = async ({ client, message, prisma }) => {
   const isImage =
-    message.mimetype?.includes('image/') || message.type === 'image';
+    message.mimetype?.includes("image/") || message.type === "image";
   const isVideo =
-    message.mimetype?.includes('video/') || message.type === 'video';
+    message.mimetype?.includes("video/") || message.type === "video";
 
   const isStickerCommand =
-    message.caption?.toLowerCase().startsWith('sticker') ||
-    message.caption?.toLowerCase().startsWith('figurinha');
+    message.caption?.toLowerCase().startsWith("sticker") ||
+    message.caption?.toLowerCase().startsWith("figurinha");
 
   const chatId = message.chat.id;
 
@@ -18,9 +20,9 @@ const media_handler = async ({ client, message, prisma }) => {
   if (!isMedia) {
     return client.reply(
       chatId,
-      // @ts-ignore
+
       client?.messages?.stickers?.media_not_found?.() ||
-        'Mídia não reconhecida para figurinha.',
+        "Mídia não reconhecida para figurinha.",
       message.id
     );
   }
@@ -29,7 +31,7 @@ const media_handler = async ({ client, message, prisma }) => {
   let user;
   let group;
   try {
-    if (chatId.includes('@g.us')) {
+    if (chatId.includes("@g.us")) {
       group = await prisma.group.findUnique({
         where: { group_id: chatId },
       });
@@ -38,7 +40,7 @@ const media_handler = async ({ client, message, prisma }) => {
           .create({
             data: {
               group_id: chatId,
-              name: message.chat.name || 'No Name',
+              name: message.chat.name || "No Name",
             },
           })
           .catch(() => null);
@@ -60,13 +62,12 @@ const media_handler = async ({ client, message, prisma }) => {
               message.sender.pushname ||
               message.sender.name ||
               message.sender.formattedName ||
-              'Unknown',
+              "Unknown",
           },
         });
       }
 
       shouldConvert =
-        // @ts-ignore
         group?.autosticker || user?.config?.auto_sticker || isStickerCommand;
     } else {
       user = await prisma.user
@@ -82,10 +83,10 @@ const media_handler = async ({ client, message, prisma }) => {
     const mediaBuffer = await client.decryptMedia(message);
 
     const stickerOptions = {
-      pack: '🅽',
-      author: 'NextBOT',
+      pack: "🅽",
+      author: "NextBOT",
       keepScale:
-        user?.config?.user_ratio === 'RATIO_16_9' ? true : false || false,
+        user?.config?.user_ratio === "RATIO_16_9" ? true : false || false,
     };
 
     if (isImage) {
@@ -96,7 +97,6 @@ const media_handler = async ({ client, message, prisma }) => {
         stickerOptions
       );
 
-      // @ts-ignore
       console.log(client?.messages?.stickers?.success());
     } else if (isVideo) {
       await client.sendMp4AsSticker(
@@ -107,11 +107,16 @@ const media_handler = async ({ client, message, prisma }) => {
         message.id
       );
 
-      // @ts-ignore
       console.log(client?.messages?.stickers?.success());
+
+      prisma.stats.update({
+        where: { stats_id: user?.stats_id },
+        data: {
+          stickers: { increment: 1 },
+        },
+      });
     }
   } catch (error) {
-    // @ts-ignore
     console.log(client?.messages?.stickers?.error());
   }
 };

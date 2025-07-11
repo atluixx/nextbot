@@ -18,14 +18,27 @@ function normalize(str) {
     .toLowerCase();
 }
 
+function extractJsonFromText(text) {
+  if (typeof text !== "string") return null;
+  const match = text.match(/```json\s*([\s\S]*?)```/i);
+  if (match && match[1]) {
+    try {
+      return JSON.parse(match[1]);
+    } catch {}
+  }
+  const fallbackMatch = text.match(/{[\s\S]*?}/);
+  if (fallbackMatch) {
+    try {
+      return JSON.parse(fallbackMatch[0]);
+    } catch {}
+  }
+  return null;
+}
+
 async function generateAIWord(maxAttempts = 5) {
   const client = new InferenceClient(process.env.HFT);
-
   const prompt = `Gere um objeto JSON no formato: { "word": "", "hint": "" }.
-  O objeto retornado deve conter apenas o JSON sem texto adicional e sem formatação como crase ou 'json'.
-A palavra (word) pode ser qualquer coisa (de 8 a 20 letras) — substantivo, adjetivo, verbo, nome próprio, objeto, conceito, lugar, etc. de media complexidade, nada exageradamente complicado.
-A dica (hint) deve ter tamanho médio (entre 10 e 25 palavras), ser clara. Ela não pode conter a palavra, mas deve ajudar a pessoa a pensar logicamente nela, com associações, contexto ou características. Evite dicas muito vagas, devem ser óbvias. Seja criativo e inteligente.
-`;
+A palavra deve ter entre 8 e 20 letras. Pode ser substantivo, adjetivo, conceito, lugar, etc. A dica deve ter entre 10 e 25 palavras e ajudar logicamente, sem usar a palavra.`;
 
   for (let i = 0; i < maxAttempts; i++) {
     try {
@@ -35,12 +48,11 @@ A dica (hint) deve ter tamanho médio (entre 10 e 25 palavras), ser clara. Ela n
         messages: [{ role: "user", content: prompt }],
       });
 
-      const text = (await result).choices[0].message;
-      console.log(text);
-      const jsonMatch = text.match(/{[^}]+}/s);
-      if (!jsonMatch) throw new Error("Resposta inválida da IA.");
+      const text = result.choices[0].message?.content;
+      const jsonData = extractJsonFromText(text);
 
-      const jsonData = JSON.parse(jsonMatch[0]);
+      if (!jsonData || !jsonData.word || !jsonData.hint) throw new Error();
+
       const word = jsonData.word.trim().toLowerCase();
       const hint = jsonData.hint.trim();
 
@@ -54,9 +66,7 @@ A dica (hint) deve ter tamanho médio (entre 10 e 25 palavras), ser clara. Ela n
 
       usedWords.add(word);
       return { word, hint };
-    } catch (err) {
-      console.error("Erro ao gerar palavra com Gemini:", err);
-    }
+    } catch {}
   }
 
   return {
@@ -65,22 +75,22 @@ A dica (hint) deve ter tamanho médio (entre 10 e 25 palavras), ser clara. Ela n
   };
 }
 
-// FUNÇÕES INTERNAS DE BANCO
 async function getOrCreateUser(prisma, userId) {
-  let user = await prisma.user.findUnique({ where: { id: userId } });
-
+  let user = await prisma.user.findFirst({ where: { id: userId } });
   if (!user) {
     const stats = await prisma.stats.create({ data: {} });
     user = await prisma.user.create({
       data: {
+        name: "Unknown",
         id: userId,
-        stats_id: stats.id,
+        stats_id: stats.stats_id,
+        config_id: crypto.randomUUID(),
       },
     });
   }
 
   const stats = await prisma.stats.findUnique({
-    where: { id: user.stats_id },
+    where: { stats_id: user.stats_id },
   });
 
   return { user, stats };
@@ -91,16 +101,25 @@ async function updateStats(prisma, userId, won) {
 
   const updatedStats = {
     hangman_games: { increment: 1 },
-    hangman_wins: won ? { increment: 1 } : undefined,
-    hangman_streak: won ? { increment: 1 } : { set: 0 },
   };
+
+  if (won) {
+    const newStreak = stats.hangman_streak + 1;
+    const newBest = Math.max(newStreak, stats.hangman_best ?? 0);
+    updatedStats.hangman_wins = { increment: 1 };
+    updatedStats.hangman_streak = { increment: 1 };
+    updatedStats.hangman_best = { set: newBest };
+  } else {
+    updatedStats.hangman_losses = { increment: 1 };
+    updatedStats.hangman_streak = { set: 0 };
+  }
 
   const totalGames = stats.hangman_games + 1;
   const totalWins = stats.hangman_wins + (won ? 1 : 0);
   const winrate = Math.round((totalWins / totalGames) * 100);
 
   await prisma.stats.update({
-    where: { id: user.stats_id },
+    where: { stats_id: user.stats_id },
     data: {
       ...updatedStats,
       hangman_winrate: winrate,
@@ -108,20 +127,6 @@ async function updateStats(prisma, userId, won) {
   });
 }
 
-async function saveGame(prisma, userId, word, won, guessed, wrong) {
-  const { user } = await getOrCreateUser(prisma, userId);
-  await prisma.hangman_game.create({
-    data: {
-      user_id: user.id,
-      word,
-      won,
-      guessed_letters: guessed.join(","),
-      wrong_letters: wrong.join(","),
-    },
-  });
-}
-
-// COMANDO PRINCIPAL
 const command = {
   name: "letra",
   aliases: ["palavra", "forca"],
@@ -133,9 +138,6 @@ const command = {
   group_admin_only: false,
   group_only: false,
 
-  /**
-   * @param {{ client: import('@open-wa/wa-automate').Client, message: import("@open-wa/wa-automate").Message, args: string[], prisma: import("@prisma/client").PrismaClient, prefix: string }} param0
-   */
   execute: async ({ client, message, args, prisma, prefix }) => {
     const chatId = message.chatId;
     const userId = message.sender.id;
@@ -209,6 +211,8 @@ const command = {
     const { word, hint, guessed, wrong, hintRevealed } = game;
     const normalizedWord = normalize(word);
     const guess = normalize(input);
+    let gameOverNow = false;
+    let isWin = false;
 
     if (commandUsed === "letra") {
       if (guess.length !== 1 || !/^[a-z]$/i.test(guess)) {
@@ -235,7 +239,6 @@ const command = {
 
       if (guess === normalizedWord) {
         game.guessed = [...new Set(normalizedWord.split(""))];
-        await updateStats(prisma, userId, true);
       }
     } else {
       return client.reply(chatId, "❓ Comando desconhecido.", message.id);
@@ -257,11 +260,10 @@ const command = {
     });
 
     if (result.isGameOver) {
-      games.delete(gameKey);
-
-      const isWin = result.isWin;
+      gameOverNow = true;
+      isWin = result.isWin;
       await updateStats(prisma, userId, isWin);
-      await saveGame(prisma, userId, word, isWin, guessed, wrong);
+      games.delete(gameKey);
     }
 
     await client.sendImage(
@@ -269,7 +271,7 @@ const command = {
       result.buffer,
       "forca.png",
       result.isGameOver
-        ? result.isWin
+        ? isWin
           ? `🎉 Parabéns! Você acertou a palavra: *${word.toUpperCase()}*!`
           : `💀 Fim de jogo! A palavra era: *${word.toUpperCase()}*.`
         : guess.length > 1
