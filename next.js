@@ -11,37 +11,37 @@
 
 */
 
-import message_handler from "./app/handlers/message.handler.js";
-import media_handler from "./app/handlers/media.handler.js";
-import botMessages from "./app/messages/bot.messages.js";
-import { create } from "@open-wa/wa-automate";
-import { PrismaClient } from "@prisma/client";
-import { pathToFileURL } from "url";
-import puppeteer from "puppeteer";
-import path from "path";
-import fs from "fs";
+import message_handler from './app/handlers/message.handler.js';
+import media_handler from './app/handlers/media.handler.js';
+import botMessages from './app/messages/bot.messages.js';
+import { create } from '@open-wa/wa-automate';
+import { PrismaClient } from '@prisma/client';
+import { pathToFileURL } from 'url';
+import puppeteer from 'puppeteer';
+import path from 'path';
+import fs from 'fs';
 
 const prisma = new PrismaClient();
 
 async function config(client) {
   client.commands = new Map();
-
+  client.id = (await client.getMe()).id;
   client.admins = {
-    luiz: { id: "393884018743@c.us" },
-    sordinni: { id: "32472916180@c.us" },
-    almeida: { id: "559193963676@c.us" },
+    luiz: { id: '393884018743@c.us' },
+    sordinni: { id: '32472916180@c.us' },
+    almeida: { id: '559193963676@c.us' },
   };
 
   client.messages = botMessages;
 
-  client.prefix = ".";
+  client.prefix = '.';
 
   client.isAdmin = (u) => {
     return Object.values(client.admins).some((admin) => admin.id === u.id);
   };
 
   client.loadCommands = async () => {
-    const commands_folder = path.resolve("app", "commands");
+    const commands_folder = path.resolve('app', 'commands');
     const commands_categories = fs.readdirSync(commands_folder);
 
     for (const category of commands_categories) {
@@ -49,7 +49,7 @@ async function config(client) {
       const commands_path = path.join(commands_folder, category);
       const command_files = fs
         .readdirSync(commands_path)
-        .filter((file) => file.endsWith(".js"));
+        .filter((file) => file.endsWith('.js'));
 
       for (const file of command_files) {
         const commandUrl = pathToFileURL(path.join(commands_path, file)).href;
@@ -70,106 +70,125 @@ async function config(client) {
       }
     }
   };
+  client.findUser = async ({ input, chat = '', message }) => {
+    if (!chat) {
+      chat = message.chat.id;
+    }
 
-  client.findUser = ({ input, chat = "", message }) => {
-    if (!chat) chat = message.chat.id;
-    const participants = message.chat.groupMetadata.participants;
+    const participants = message.chat.groupMetadata?.participants || [];
 
+    // Obtém todos os contatos dos participantes
+    const contacts = await Promise.all(
+      participants.map(async (p) => {
+        const contact = await client.getContact(p.id);
+        return { ...contact, id: p.id };
+      })
+    );
+
+    // Se for citação sem input
     if (!input && message.quotedMessage?.quoted) {
       const quotedUserId =
         message.quotedMessage.quoted.sender?.id ||
         message.quotedMessage.quoted?.id?.participant;
-      const quotedUser = participants.find((p) => p.id === quotedUserId);
-      return quotedUser || null;
+
+      const quoted = contacts.find((c) => c.id === quotedUserId);
+
+      if (quoted) {
+        return quoted;
+      } else {
+        return null;
+      }
     }
 
-    if (!input) return null;
+    if (!input) {
+      return null;
+    }
+
+    const cleanInput = input.toLowerCase().replace('@', '').replace(/\s+/g, '');
+
+    let mode;
+    if (/^\d+$/.test(cleanInput)) mode = 'number';
+    else if (input.includes('@c.us')) mode = 'id';
+    else if (input.includes('@')) mode = 'tag';
+    else mode = 'name';
+
+    // Estratégias de busca usando os contatos
+    const strategies = {
+      number: () =>
+        contacts.filter((c) => {
+          const match = c.id.replace('@c.us', '').includes(cleanInput);
+          return match;
+        }),
+
+      id: () =>
+        contacts.filter((c) => {
+          const match = c.id === input;
+          return match;
+        }),
+
+      tag: () =>
+        contacts.filter((c) => {
+          const match = c.id.replace('@c.us', '') === cleanInput;
+          return match;
+        }),
+
+      name: () =>
+        contacts.filter((c) => {
+          const name = (c.pushname || c.formattedName || c.name || '')
+            .toLowerCase()
+            .replace(/\s+/g, '');
+          const match = name.includes(cleanInput);
+          return match;
+        }),
+    };
+
+    let users = strategies[mode]?.() || [];
+
+    if (users.length > 0) {
+      return users[0];
+    }
 
     const tryAllModes = () => {
-      const tryModes = [
-        () =>
-          participants.find((c) => c.id.replace("@c.us", "").includes(input)),
-        () => participants.find((c) => c.id === input),
-        () =>
-          participants.find(
-            (c) => c.id.replace("@c.us", "") === input.replace("@", "")
-          ),
-        () =>
-          participants.find((c) =>
-            (c.pushname || "").toLowerCase().includes(input.toLowerCase())
-          ),
-      ];
-
-      for (const tryMode of tryModes) {
-        const result = tryMode();
-        if (result) return result;
+      for (const [key, fn] of Object.entries(strategies)) {
+        console.log(`🔄 Tentando modo: ${key}`);
+        const result = fn()[0];
+        if (result) {
+          return result;
+        }
       }
-
       return null;
     };
 
-    let mode;
-    if (!isNaN(parseInt(input))) mode = "number";
-    else if (input.includes("@c.us")) mode = "id";
-    else if (input.includes("@")) mode = "tag";
-    else mode = "name";
-
-    let users = [];
-
-    switch (mode) {
-      case "number":
-        users = participants.filter((c) =>
-          c.id.replace("@c.us", "").includes(input)
-        );
-        break;
-
-      case "id":
-        users = participants.filter((c) => c.id === input);
-        break;
-
-      case "tag":
-        users = participants.filter(
-          (c) => c.id.replace("@c.us", "") === input.replace("@", "")
-        );
-        break;
-
-      case "name":
-        users = participants.filter((c) =>
-          (c.pushname || "").toLowerCase().includes(input.toLowerCase())
-        );
-        break;
-    }
-
-    return users[0] || tryAllModes();
+    return tryAllModes();
   };
 }
 
 prisma
   .$connect()
   .then(() => {
-    console.log("✅ Conectado ao Prisma com sucesso!");
+    console.log('✅ Conectado ao Prisma com sucesso!');
   })
   .catch((err) => {
-    console.error("❌ Erro ao conectar ao Prisma:", err);
+    console.error('❌ Erro ao conectar ao Prisma:', err);
   });
 
 create({
-  sessionId: "next",
+  sessionId: 'next',
   useChrome: true,
+  authTimeout: 0,
 }).then(async (client) => {
   console.clear();
 
-  client.id = (await client.getMe()).id;
   await config(client);
 
   client.loadCommands().then(() => {
-    console.log("✅ Comandos carregados com sucesso!");
+    console.log('✅ Comandos carregados com sucesso!');
   });
 
   client.onMessage(async (m) => {
     try {
       const isMedia =
-        m.mimetype?.includes("image/") || m.mimetype?.includes("video/");
+        m.mimetype?.includes('image/') || m.mimetype?.includes('video/');
 
       if (isMedia) {
         return await media_handler({
@@ -184,16 +203,16 @@ create({
         message: m,
         prisma,
 
-        prefix: client.prefix || ".",
+        prefix: client.prefix || '.',
       });
     } catch (err) {
-      console.error("❌ Erro ao processar mensagem:", err);
+      console.error('❌ Erro ao processar mensagem:', err);
     }
   });
 });
 
-process.on("SIGINT", async () => {
-  console.log("🔌 Encerrando conexão com o banco...");
+process.on('SIGINT', async () => {
+  console.log('🔌 Encerrando conexão com o banco...');
   await prisma.$disconnect();
   process.exit();
 });

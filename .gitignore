@@ -7,3 +7,4 @@ jsconfig.json
 .vscode
 /app/icons
 .node-persist
+temp/

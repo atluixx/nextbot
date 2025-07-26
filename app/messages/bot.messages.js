@@ -10,7 +10,7 @@ export default {
       return `${username} este comando só pode ser usado em grupos.`;
     },
     missing_args: ({ username, command, prefix, args }) => {
-      return `${username} você não forneceu os argumentos necessários para o comando. \n Use: ${prefix}${command} <${args}>`;
+      return `${username} você não forneceu os argumentos necessários para o comando. \n Use: ${prefix}${command} ${args}`;
     },
   },
   exceptions: {

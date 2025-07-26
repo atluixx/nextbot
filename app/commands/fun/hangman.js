@@ -3,13 +3,41 @@
 import { generateCanvas } from "../../functions/render.hangman.js";
 import { InferenceClient } from "@huggingface/inference";
 import { GoogleGenAI } from "@google/genai";
+import fs from "fs";
+import path from "path";
 import "dotenv/config.js";
 
 const GEMINI_API_KEY = process.env.GENAI_KEY;
 const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
 
 const games = new Map();
-const usedWords = new Set();
+
+// 🧠 Carregamento e salvamento do used.words.json
+const USED_WORDS_PATH = path.resolve("app/persistence/used.words.json");
+
+let usedWords = new Set();
+
+function loadUsedWords() {
+  try {
+    const data = fs.readFileSync(USED_WORDS_PATH, "utf8");
+    const words = JSON.parse(data);
+    if (Array.isArray(words)) {
+      usedWords = new Set(words);
+    }
+  } catch {
+    usedWords = new Set();
+  }
+}
+
+function saveUsedWords() {
+  try {
+    fs.writeFileSync(USED_WORDS_PATH, JSON.stringify([...usedWords], null, 2));
+  } catch (err) {
+    console.error("Erro ao salvar used.words.json:", err);
+  }
+}
+
+loadUsedWords();
 
 function normalize(str) {
   return str
@@ -38,7 +66,7 @@ function extractJsonFromText(text) {
 async function generateAIWord(maxAttempts = 5) {
   const client = new InferenceClient(process.env.HFT);
   const prompt = `Gere um objeto JSON no formato: { "word": "", "hint": "" }.
-A palavra deve ter entre 8 e 20 letras. Pode ser substantivo, adjetivo, conceito, lugar, etc. A dica deve ter entre 10 e 25 palavras e ajudar logicamente, sem usar a palavra.`;
+A palavra deve ter entre 5 e 10 letras. Pode ser substantivo, adjetivo, conceito, lugar, etc. A dica deve ter entre 10 e 25 palavras e ajudar logicamente, sem usar a palavra.`;
 
   for (let i = 0; i < maxAttempts; i++) {
     try {
@@ -65,6 +93,7 @@ A palavra deve ter entre 8 e 20 letras. Pode ser substantivo, adjetivo, conceito
         continue;
 
       usedWords.add(word);
+      saveUsedWords();
       return { word, hint };
     } catch {}
   }

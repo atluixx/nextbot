@@ -77,6 +77,22 @@ export async function renderFlatMinimalTicTacToe({
     ctx.stroke();
   }
 
+  // 🔹 Números das células (1 a 9)
+  ctx.font = "bold 36px Arial";
+  ctx.fillStyle = "rgba(255, 255, 255, 0.08)";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+
+  let cellNumber = 1;
+  for (let row = 0; row < 3; row++) {
+    for (let col = 0; col < 3; col++) {
+      const cx = boardOffsetX + col * STYLE.cellSize + STYLE.cellSize / 2;
+      const cy = boardOffsetY + row * STYLE.cellSize + STYLE.cellSize / 2;
+      ctx.fillText(cellNumber.toString(), cx, cy);
+      cellNumber++;
+    }
+  }
+
   // 🔹 Peças
   for (let row = 0; row < 3; row++) {
     for (let col = 0; col < 3; col++) {

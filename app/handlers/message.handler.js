@@ -9,10 +9,10 @@
  * }} param0
  */
 
-const message_handler = async ({ client, message, prisma, prefix = "-" }) => {
+const message_handler = async ({ client, message, prisma }) => {
   const chatId = message.chatId;
   const senderId = message.sender.id;
-  const isGroup = chatId.endsWith("@g.us");
+  const isGroup = chatId.endsWith('@g.us');
 
   if (!message.body?.trim()) return;
 
@@ -22,7 +22,7 @@ const message_handler = async ({ client, message, prisma, prefix = "-" }) => {
     user = await prisma.user.create({
       data: {
         id: senderId,
-        name: message.sender.pushname || "Unknown",
+        name: message.sender.pushname || 'Unknown',
         config: {
           create: {},
         },
@@ -49,7 +49,7 @@ const message_handler = async ({ client, message, prisma, prefix = "-" }) => {
         group = await prisma.group.create({
           data: {
             group_id: chatId,
-            name: message.chat.name || "Unknown",
+            name: message.chat.name || 'Unknown',
           },
         });
 
@@ -85,18 +85,35 @@ const message_handler = async ({ client, message, prisma, prefix = "-" }) => {
       data: {
         total_messages: { increment: 1 },
         last_activity: new Date(),
+        prefix: '.',
       },
     });
   }
-  prefix = group.prefix || prefix;
+
+  const prefix = isGroup ? group?.prefix || prefix : prefix;
 
   console.log(
     `[M] Mensagem de ${
-      message.sender.pushname || message.sender.formattedName || "Alguém"
-    }: ${message.body || message.caption || "[Sem texto]"} | Tipo: ${
+      message.sender.pushname || message.sender.formattedName || 'Alguém'
+    }: ${message.body || message.caption || '[Sem texto]'} | Tipo: ${
       message.type
     } | ID: ${message.id} | Grupo: ${isGroup}`
   );
+
+  if (
+    typeof message.body === 'string' &&
+    message.body.includes('@559193959166')
+  ) {
+    const botInfo = await client.getMe();
+
+    return await client.reply(
+      message.chat.id,
+      `✨ | Olá, ${message.sender.pushname || 'usuário'}! Eu sou o ${
+        botInfo.name
+      }.\n` + `Meu prefixo neste grupo é: *${prefix}*`,
+      message.id
+    );
+  }
 
   if (!message.body.startsWith(prefix)) return;
 
@@ -106,17 +123,6 @@ const message_handler = async ({ client, message, prisma, prefix = "-" }) => {
     .split(/\s+/);
 
   const command = client.commands.get(commandName.toLowerCase());
-
-  if (message.mentionedJidList.includes(await client.getHostNumber()))
-    return await client.reply(
-      message.chat.id,
-      `✨ | Olá, ${message.sender.pushname}! Eu sou o ${
-        (
-          await client.getMe()
-        ).name
-      }. \n Meu prefixo neste grupo é ${prefix}`,
-      message.id
-    );
 
   if (!command) return;
 
@@ -134,7 +140,7 @@ const message_handler = async ({ client, message, prisma, prefix = "-" }) => {
       chatId,
       client.messages?.moderation?.admin_only?.({
         username: message.sender.pushname,
-      }) || "⚠️ Apenas administradores podem usar este comando.",
+      }) || '⚠️ Apenas administradores podem usar este comando.',
       message.id
     );
   }
@@ -147,12 +153,14 @@ const message_handler = async ({ client, message, prisma, prefix = "-" }) => {
       chatId,
       client.messages?.moderation?.group_admin?.({
         username: message.sender.pushname,
-      }) || "⚠️ Apenas administradores do grupo podem usar este comando.",
+      }) || '⚠️ Apenas administradores do grupo podem usar este comando.',
       message.id
     );
   }
 
   try {
+    await client.react(message.id, '⏳');
+
     await command.execute({
       client,
       message,
@@ -160,16 +168,18 @@ const message_handler = async ({ client, message, prisma, prefix = "-" }) => {
       user,
       group,
       prisma,
-      prefix: group.prefix || prefix,
+      prefix,
       chatId,
       senderId,
       isGroup,
     });
+
+    await client.react(message.id, '✅');
   } catch (error) {
     console.error(`[CMD] Erro ao executar comando '${commandName}':`, error);
     await client.reply(
       chatId,
-      "❌ Ocorreu um erro ao executar o comando. Tente novamente.",
+      '❌ Ocorreu um erro ao executar o comando. Tente novamente.',
       message.id
     );
   }

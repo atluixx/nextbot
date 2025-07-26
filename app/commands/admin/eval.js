@@ -1,11 +1,13 @@
+// @ts-nocheck
+
 const command = {
-  name: "eval",
-  aliases: ["ev"],
-  description: "Executa código JavaScript.",
+  name: 'eval',
+  aliases: ['ev'],
+  description: 'Executa código JavaScript.',
   args_length: 1,
-  args: "<código>",
+  args: '<código>',
   admin_only: true,
-  group_admin_only: true,
+  group_admin_only: false,
   group_only: false,
 
   /**
@@ -15,9 +17,9 @@ const command = {
     if (!args || args.length < command.args_length) {
       return client.reply(
         message.chat.id,
-        // @ts-ignore
+
         client.messages.moderation.missing_args({
-          username: message.sender.pushname || "Usuário",
+          username: message.sender.pushname || 'Usuário',
           command: command.name,
           prefix: prefix,
           args: command.args,
@@ -27,12 +29,12 @@ const command = {
     }
 
     try {
-      const code = args.join(" ");
+      const code = args.join(' ');
       const result = await eval(`(async () => { ${code} })()`);
 
       let output = result;
-      if (typeof result !== "string") {
-        output = (await import("util")).inspect(result);
+      if (typeof result !== 'string') {
+        output = (await import('util')).inspect(result);
       }
 
       await client.reply(

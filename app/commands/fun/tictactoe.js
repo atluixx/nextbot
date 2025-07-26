@@ -141,6 +141,28 @@ const command = {
 
     if (
       args.length === 1 &&
+      args[0].toLowerCase() === "recusar" &&
+      pendingConfirmations.has(chatId)
+    ) {
+      const pending = pendingConfirmations.get(chatId);
+
+      if (pending.to !== senderId)
+        return client.reply(
+          chatId,
+          "❌ Você não foi desafiado para este jogo.",
+          message.id
+        );
+
+      pendingConfirmations.delete(chatId);
+      await client.reply(
+        chatId,
+        "✅ O jogo foi finalizado com sucesso.",
+        message.id
+      );
+    }
+
+    if (
+      args.length === 1 &&
       args[0].toLowerCase() === "aceitar" &&
       pendingConfirmations.has(chatId)
     ) {
@@ -182,12 +204,11 @@ Use: *${prefix}velha <1-9>*`,
     }
 
     if (args.length === 1 && !game) {
-      const opponent = client.findUser({
+      const opponent = await client.findUser({
         input: args[0],
         chat: chatId,
         message,
       });
-
       if (!opponent || opponent.id === senderId)
         return client.reply(
           chatId,
@@ -204,7 +225,7 @@ Use: *${prefix}velha <1-9>*`,
         }, você foi desafiado para um jogo da velha por @${
           senderId.split("@")[0]
         }!
-Responda com *${prefix}velha aceitar* para começar.`,
+Responda com *${prefix}velha aceitar* para começar ou *${prefix}velha recusar* para cancelar o jogo. `,
         message.id
       );
     }
