@@ -1,16 +1,5 @@
 // @ts-nocheck
 
-/*
-
- _____                                        ____                         
-| ____|   _    __ _ _ __ ___   ___     __ _  | __ ) _ __ _   _ _ __   __ _ 
-|  _|| | | |  / _` | '_ ` _ \ / _ \   / _` | |  _ \| '__| | | | '_ \ / _` |
-| |__| |_| | | (_| | | | | | | (_) | | (_| | | |_) | |  | |_| | | | | (_| |
-|_____\__,_|  \__,_|_| |_| |_|\___/   \__,_| |____/|_|   \__,_|_| |_|\__,_|
-
-
-*/
-
 import message_handler from './app/handlers/message.handler.js';
 import media_handler from './app/handlers/media.handler.js';
 import botMessages from './app/messages/bot.messages.js';

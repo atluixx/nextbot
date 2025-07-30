@@ -39,6 +39,17 @@ const message_handler = async ({ client, message, prisma }) => {
     console.log(`[DB] Novo usuário registrado: ${senderId}`);
   }
 
+  if (user.name !== message.sender.pushname) {
+    await prisma.user.update({
+      where: {
+        id: user.id,
+      },
+      data: {
+        name: message.sender.pushname,
+      },
+    });
+  }
+
   let group = null;
 
   if (isGroup) {
