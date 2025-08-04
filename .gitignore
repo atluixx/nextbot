@@ -5,6 +5,5 @@ next.data.json
 /app/fonts/
 jsconfig.json
 .vscode
-/app/icons
 .node-persist
 temp/

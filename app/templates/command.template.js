@@ -1,9 +1,9 @@
 const command = {
-  name: "",
+  name: '',
   aliases: [],
-  description: "",
+  description: '',
   args_length: 1,
-  args: "",
+  args: '',
   admin_only: false,
   group_admin_only: false,
   group_only: false,
