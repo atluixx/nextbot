@@ -1,4 +1,4 @@
-FROM node:18
+FROM node:21
 
 RUN apt-get update && apt-get install -y \
     chromium \
@@ -29,7 +29,7 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm install
 
-RUN npx prisma generate
+RUN npx prisma generate --schema app/prisma/schema.prisma
 
 COPY . .
 

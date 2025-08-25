@@ -6,7 +6,6 @@ import botMessages from './app/messages/bot.messages.js';
 import { create } from '@open-wa/wa-automate';
 import { PrismaClient } from '@prisma/client';
 import { pathToFileURL } from 'url';
-import puppeteer from 'puppeteer';
 import path from 'path';
 import fs from 'fs';
 
