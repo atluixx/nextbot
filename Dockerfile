@@ -29,7 +29,7 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm install
 
-RUN npx prisma generate --schema app/prisma/schema.prisma
+RUN npx prisma generate --schema ./app/prisma/schema.prisma
 
 COPY . .
 
